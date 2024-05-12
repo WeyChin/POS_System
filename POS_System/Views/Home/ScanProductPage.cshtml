@@ -1,0 +1,207 @@
+﻿@{
+    Layout = "_Layout";
+}
+
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+<script src="https://js.stripe.com/v3/"></script>
+
+<div class="container mt-5">
+    <div class="row">
+        <div class="col-md-6">
+            <h2>Scan Product ID:</h2>
+            <input type="text" class="form-control" id="productIdInput" placeholder="Scan product ID">
+        </div>
+        <div class="col-md-6">
+            <h2>Product Details:</h2>
+            <div class="overflow-auto" style="max-height: 650px;">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Product SKU</th>
+                            <th>Product Name</th>
+                            <th>Product Quantity</th>
+                            <th>Product Price</th>
+                            <!-- Add more columns as needed -->
+                        </tr>
+                    </thead>
+                    <tbody id="productDetails">
+                        <!-- Product details will be added here dynamically -->
+                    </tbody>
+                </table>
+            </div>
+            <p>Total Price: <span id="totalPrice">0</span></p>
+            <div class="float-left">
+                <button class="btn btn-info mt-3" id="clearProductBtn">Clear</button>
+            </div>
+            <button class="btn btn-primary mt-3 float-right" id="paymentBtn">Pay</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Function to add product details to the table
+    function addProductDetails(productSKU, productName, productQuantity, productPrice) {
+        var tableBody = document.getElementById("productDetails");
+        var existingRow = null;
+
+        console.log(productSKU);
+        console.log("1");
+        console.log($('#productDetails tr').length);
+
+        // Check if the product SKU already exists in the table
+        $('#productDetails tr').each(function () {
+            console.log(productSKU);
+            console.log("2");
+            if ($(this).find('td:eq(0)').text() === productSKU) {
+                existingRow = $(this);
+                return false; // Exit the loop
+            }
+        });
+
+        if (existingRow) {
+            // If the product SKU already exists, update the quantity and price
+            var quantity = parseInt(existingRow.find('td:eq(2)').text()) + productQuantity;
+            var price = parseFloat(existingRow.find('td:eq(3)').text()) + (productPrice * productQuantity);
+            existingRow.find('td:eq(2)').text(quantity);
+            existingRow.find('td:eq(3)').text(price.toFixed(2));
+        } else {
+            // If the product SKU does not exist, add a new row
+            var newRow = tableBody.insertRow();
+            var cell1 = newRow.insertCell(0);
+            var cell2 = newRow.insertCell(1);
+            var cell3 = newRow.insertCell(2);
+            var cell4 = newRow.insertCell(3);
+            cell1.innerHTML = productSKU;
+            cell2.innerHTML = productName;
+            cell3.innerHTML = productQuantity;
+            cell4.innerHTML = (productPrice * productQuantity).toFixed(2);
+            // Add more cells and data as needed
+        }
+
+        // Update total price
+        updateTotalPrice();
+    }
+
+    // Function to fetch product details from the controller
+    function fetchProductDetails(productSKU) {
+        $.ajax({
+            type: 'GET',
+            url: '/Home/GetProductDetails', // Replace with your controller action URL
+            data: { productSKU: productSKU },
+            success: function (data) {
+                addProductDetails(data.SKU, data.Name, 1, data.PricePerUnit);
+            },
+            error: function (xhr, status, error) {
+                console.error(error);
+                alert('Error fetching product details. Please try again.');
+            }
+        });
+    }
+
+    // Function to update the total price
+    function updateTotalPrice() {
+        var totalPrice = 0;
+        $('#productDetails tr').each(function () {
+            var price = parseFloat($(this).find('td:eq(3)').text());
+            totalPrice += price;
+        });
+        $('#totalPrice').text(totalPrice.toFixed(2));
+    }
+
+    // Event listener for Enter key press in the text field
+    document.getElementById("productIdInput").addEventListener("keypress", function (event) {
+        if (event.key === "Enter") {
+            var productId = event.target.value;
+            fetchProductDetails(productId);
+            // Clear the input field
+            event.target.value = '';
+        }
+    });
+
+    // Event listener for "Clear" button click
+    document.getElementById("clearProductBtn").addEventListener("click", function () {
+        $('#productDetails').empty(); // Clear table body
+        $('#totalPrice').text('0'); // Reset total price
+    });
+
+    //Payment
+    document.addEventListener("DOMContentLoaded", function () {
+        document.getElementById("paymentBtn").addEventListener("click", function () {
+            var amount = parseFloat($('#totalPrice').text());
+            var currency = "MYR";
+
+            fetch("/Home/CreatePaymentIntent", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    amount: amount,
+                    currency: currency
+                })
+            })
+                .then(function (response) {
+                    if (!response.ok) {
+                        throw new Error("Network response was not ok");
+                    }
+                    // Don't attempt to redirect here
+                })
+                .then(function (data) {
+                    // Redirect to the payment URL
+                    window.location.href = data.sessionUrl;
+
+                    // Handle successful payment separately
+                    handlePaymentSuccess();
+                })
+                .catch(function (error) {
+                    console.error("Error occurred:", error.message);
+                    alert("Error processing payment. Please try again.");
+                });
+        });
+    });
+
+    function handlePaymentSuccess() {
+        // Get the table element
+        var table = document.getElementById("productTable");
+
+        // Initialize arrays to store product SKUs and quantities
+        var skus = [];
+        var quantities = [];
+
+        // Loop through each row in the table
+        for (var i = 1; i < table.rows.length; i++) { // Start from 1 to skip header row
+            // Get the cells in the current row
+            var cells = table.rows[i].cells;
+
+            // Extract SKU and quantity from the cells
+            var sku = cells[0].innerText; // Assuming SKU is in the first column
+            var quantity = parseInt(cells[2].innerText); // Assuming quantity is in the third column
+
+            // Add SKU and quantity to the arrays
+            skus.push(sku);
+            quantities.push(quantity);
+        }
+
+        // Create an object with SKUs and quantities
+        var data = {
+            skus: skus,
+            quantities: quantities
+        };
+
+        // Send a POST request to the controller with the data
+        fetch("/Home/UpdateProductQuantities", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(data)
+        })
+            .then(function (response) {
+                // Handle response
+            })
+            .catch(function (error) {
+                console.error("Error:", error);
+            });
+    }
+
+</script>

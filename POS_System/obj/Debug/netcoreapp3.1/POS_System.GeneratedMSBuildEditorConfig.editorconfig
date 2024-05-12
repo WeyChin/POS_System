@@ -1,0 +1,11 @@
+is_global = true
+build_property.TargetFramework = netcoreapp3.1
+build_property.TargetPlatformMinVersion = 7.0
+build_property.UsingMicrosoftNETSdkWeb = true
+build_property.ProjectTypeGuids = 
+build_property.InvariantGlobalization = 
+build_property.PlatformNeutralAssembly = 
+build_property.EnforceExtendedAnalyzerRules = 
+build_property._SupportedPlatformList = Android,iOS,Linux,macOS,Windows
+build_property.RootNamespace = POS_System
+build_property.ProjectDir = C:\Users\heng.weychin\source\repos\POS_System\POS_System\
